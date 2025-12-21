@@ -1,10 +1,13 @@
-#ifndef DOOM_SONG_H
-#define DOOM_SONG_H
+#ifndef MIDI_SONG_H
+#define MIDI_SONG_H
 
 #include "opl.h"
 
-const SongEvent doom_song[] = {
+const SongEvent midi_song[] = {
+    { .delay_ms=0, .type=3, .channel=0, .note=30 },
+    { .delay_ms=0, .type=3, .channel=1, .note=29 },
     { .delay_ms=0, .type=1, .channel=1, .note=40 },
+    { .delay_ms=0, .type=3, .channel=2, .note=33 },
     { .delay_ms=0, .type=1, .channel=2, .note=40 },
     { .delay_ms=0, .type=1, .channel=8, .note=36 },
     { .delay_ms=0, .type=1, .channel=8, .note=40 },

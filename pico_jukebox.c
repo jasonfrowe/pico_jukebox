@@ -64,30 +64,6 @@ void setup_pins() {
     }
 }
 
-
-
-// Add this helper function
-// void handle_drum_note(uint8_t note) {
-//     // Channel 8 is our dedicated Drum Channel
-    
-//     // MIDI Map:
-//     // 35, 36 = Kick
-//     // 38, 40 = Snare
-//     // 42, 44, 46 = HiHat
-//     // 41, 43, 45, 47, 48, 50 = Toms
-//     // 49, 57 = Cymbals
-    
-//     if (note == 35 || note == 36) {
-//         load_patch(8, &patch_bd);
-//     } 
-//     else if (note == 38 || note == 40) {
-//         load_patch(8, &patch_snare);
-//     }
-//     else if (note >= 41) {
-//         load_patch(8, &patch_hihat); // Lazy catch-all for cymbals/hats
-//     }
-// }
-
 // Updated Sequencer
 void play_song(const SongEvent* song) {
     int i = 0;
@@ -165,7 +141,7 @@ int main() {
 
     while(true) {
         printf("Playing 'DOOM'...\n");
-        play_song(doom_song);
+        play_song(midi_song);
         sleep_ms(2000); // Wait 2 seconds before repeating the song
     }
 }
