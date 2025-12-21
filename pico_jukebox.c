@@ -64,31 +64,7 @@ void setup_pins() {
     }
 }
 
-
-
-// Add this helper function
-// void handle_drum_note(uint8_t note) {
-//     // Channel 8 is our dedicated Drum Channel
-    
-//     // MIDI Map:
-//     // 35, 36 = Kick
-//     // 38, 40 = Snare
-//     // 42, 44, 46 = HiHat
-//     // 41, 43, 45, 47, 48, 50 = Toms
-//     // 49, 57 = Cymbals
-    
-//     if (note == 35 || note == 36) {
-//         load_patch(8, &patch_bd);
-//     } 
-//     else if (note == 38 || note == 40) {
-//         load_patch(8, &patch_snare);
-//     }
-//     else if (note >= 41) {
-//         load_patch(8, &patch_hihat); // Lazy catch-all for cymbals/hats
-//     }
-// }
-
-// Updated Sequencer
+// --- Song Playback Logic ---
 void play_song(const SongEvent* song) {
     int i = 0;
     while (true) {
@@ -96,17 +72,28 @@ void play_song(const SongEvent* song) {
         
         if (event.delay_ms > 0) sleep_ms(event.delay_ms);
 
-        if (event.type == 2) break; // End
-        
-        else if (event.type == 1) { // Note On
-            if (event.channel == 8) {
-                // Dynamic Drum Patch Swap
-                load_drum_patch(8, event.note);
-            }
-            OPL_NoteOn(event.channel, event.note);
-    }
-        else if (event.type == 0) { // Note Off
-            OPL_NoteOff(event.channel);
+        // --- COMMAND HANDLER ---
+        switch (event.type) {
+            case 0: // Note Off
+                OPL_NoteOff(event.channel);
+                break;
+
+            case 1: // Note On
+                if (event.channel == 8) {
+                    // Drums are special: Map Note Number -> Patch
+                    load_drum_patch(8, event.note);
+                }
+                OPL_NoteOn(event.channel, event.note);
+                break;
+
+            case 2: // End of Song
+                return; // Break the function (or loop)
+
+            case 3: // Program Change (New!)
+                // The 'note' field holds the Program Number (0-127)
+                // We use our Library function to load the patch
+                load_gm_instrument(event.channel, event.note);
+                break;
         }
 
         i++;
@@ -115,57 +102,28 @@ void play_song(const SongEvent* song) {
 
 int main() {
     stdio_init_all();
-    setup_pins(); // Pins default to HIGH (Inactive)
-
-    printf("Pico OPL2 Jukebox Starting...\n");
-
-    // --- NEW: WAIT FOR FPGA TO WAKE UP ---
-    // The TinyFPGA BX bootloader takes about 1-2 seconds.
-    // We wait 3 seconds to be absolutely sure the FPGA is ready 
-    // to listen to our commands.
-    printf("Waiting for FPGA Bootloader...\n");
-    sleep_ms(3000); 
-
-    // 1. Hardware Reset (Pulse Low)
-    // Now that the FPGA is definitely awake, we reset its core logic.
-    printf("Resetting JTOPL Core...\n");
-    gpio_put(PIN_RST, 0); 
-    sleep_ms(10);
-    gpio_put(PIN_RST, 1); 
-    sleep_ms(10);
-
-    // 2. Software Initialization
-    printf("Initializing OPL2 Registers...\n");
-    opl_clear();
+    setup_pins();
     
+    sleep_ms(3000); // Wait for FPGA
+    
+    // Init
+    gpio_put(PIN_RST, 0); sleep_ms(10);
+    gpio_put(PIN_RST, 1); sleep_ms(10);
+    opl_clear();
     opl_write(false, 0x01); opl_write(true, 0x20); // Enable Waveforms
 
-    // 1. INSTRUMENT SETUP
-    printf("Loading Instruments...\n");
+    printf("Jukebox Ready.\n");
 
-    // A. Initialize all channels to Piano (GM 0) by default
-    for(int i=0; i<9; i++) {
-        load_gm_instrument(i, 0); 
-    }
+    // 1. Set Defaults (Optional but good practice)
+    // Initialize everyone to Piano just in case the MIDI file assumes defaults
+    for(int i=0; i<9; i++) load_gm_instrument(i, 0);
 
-    // B. Load specific Doom instruments
-    // In a real MIDI player, we would read "Program Change" events from the file.
-    // For now, we hardcode the mapping based on the Doom MIDI:
-
-    // Channel 1 uses Overdriven Guitar (GM Program 29)
-    load_gm_instrument(1, 29); 
-
-    // Channel 2 uses Electric Bass (GM Program 33)
-    load_gm_instrument(2, 33);
-
-    // Channel 8 (Drums) - Initial setup (Kick)
-    load_drum_patch(8, 36);
-
-    printf("Starting Jukebox...\n");
-
+    // 2. Play!
+    // No more manual patch loading! The song data handles it.
+    printf("Playing Song...\n");
+    
     while(true) {
-        printf("Playing 'DOOM'...\n");
-        play_song(doom_song);
-        sleep_ms(2000); // Wait 2 seconds before repeating the song
+        play_song(midi_song);
+        sleep_ms(2000);
     }
 }

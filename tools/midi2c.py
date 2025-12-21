@@ -7,39 +7,59 @@ def midi_to_c(input_file, output_file, array_name="midi_song"):
     
     print(f"Parsing {input_file}...")
     
-    # ACCUMULATOR FOR SKIPPED TIME
     pending_time = 0.0
 
     for msg in mid:
-        # Always add the time of the current message to our accumulator
         pending_time += msg.time
         
-        # Filter: We only want Note On/Off
-        if msg.type == 'note_on' or msg.type == 'note_off':
+        # Define Event Types
+        # 0 = Note Off
+        # 1 = Note On
+        # 2 = End of Song
+        # 3 = Program Change (New!)
+        
+        event_type = -1
+        opl_ch = -1
+        data_byte = 0 # Holds Note OR Program Number
+
+        # --- 1. Filter & Map Channels ---
+        # We process NoteOn, NoteOff, and ProgramChange
+        if msg.type in ['note_on', 'note_off', 'program_change']:
             
-            # --- CHANNEL MAPPING ---
-            # Map MIDI Ch 10 (9) -> OPL Ch 8
-            if msg.channel == 9: 
-                opl_ch = 8 
+            # Map Drums (MIDI Ch 9) -> OPL Ch 8
+            if msg.channel == 9:
+                opl_ch = 8
+            # Map Melodic (MIDI Ch 0-8) -> OPL Ch 0-8
             elif msg.channel < 8:
                 opl_ch = msg.channel
             else:
-                # If we skip this channel, we must NOT reset pending_time yet!
-                # We just loop again, keeping the time accumulated.
-                continue 
-            
-            # --- COMMAND PARSING ---
-            cmd = 1 # Note On
-            if msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
-                cmd = 0 # Note Off
+                # Skip channels > 8 (OPL2 limit)
+                continue
 
-            # --- GENERATE EVENT ---
-            # Now we use the accumulated time
+            # --- 2. Determine Event Type ---
+            if msg.type == 'program_change':
+                event_type = 3
+                data_byte = msg.program # The instrument number (0-127)
+                
+                # Ignore program changes on the Drum Channel (8)
+                # (Standard MIDI drums don't usually change programs like melodic channels)
+                if opl_ch == 8: 
+                    continue
+
+            elif msg.type == 'note_on' and msg.velocity > 0:
+                event_type = 1
+                data_byte = msg.note
+                
+            else: # Note Off (or Note On w/ vol=0)
+                event_type = 0
+                data_byte = msg.note
+
+            # --- 3. Write Event ---
             delay_ms = int(pending_time * 1000)
             
-            events.append(f"    {{ .delay_ms={delay_ms}, .type={cmd}, .channel={opl_ch}, .note={msg.note} }},")
+            # Format: { delay, type, channel, note/program }
+            events.append(f"    {{ .delay_ms={delay_ms}, .type={event_type}, .channel={opl_ch}, .note={data_byte} }},")
             
-            # Reset accumulator because we just "spent" the time
             pending_time = 0.0
 
     # Write C Header
@@ -57,4 +77,4 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python midi2c.py <file.mid>")
     else:
-        midi_to_c(sys.argv[1], "song_data.h", "doom_song")
+        midi_to_c(sys.argv[1], "song_data.h", "midi_song")
