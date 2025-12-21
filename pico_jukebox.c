@@ -67,26 +67,26 @@ void setup_pins() {
 
 
 // Add this helper function
-void handle_drum_note(uint8_t note) {
-    // Channel 8 is our dedicated Drum Channel
+// void handle_drum_note(uint8_t note) {
+//     // Channel 8 is our dedicated Drum Channel
     
-    // MIDI Map:
-    // 35, 36 = Kick
-    // 38, 40 = Snare
-    // 42, 44, 46 = HiHat
-    // 41, 43, 45, 47, 48, 50 = Toms
-    // 49, 57 = Cymbals
+//     // MIDI Map:
+//     // 35, 36 = Kick
+//     // 38, 40 = Snare
+//     // 42, 44, 46 = HiHat
+//     // 41, 43, 45, 47, 48, 50 = Toms
+//     // 49, 57 = Cymbals
     
-    if (note == 35 || note == 36) {
-        load_patch(8, &patch_bd);
-    } 
-    else if (note == 38 || note == 40) {
-        load_patch(8, &patch_snare);
-    }
-    else if (note >= 41) {
-        load_patch(8, &patch_hihat); // Lazy catch-all for cymbals/hats
-    }
-}
+//     if (note == 35 || note == 36) {
+//         load_patch(8, &patch_bd);
+//     } 
+//     else if (note == 38 || note == 40) {
+//         load_patch(8, &patch_snare);
+//     }
+//     else if (note >= 41) {
+//         load_patch(8, &patch_hihat); // Lazy catch-all for cymbals/hats
+//     }
+// }
 
 // Updated Sequencer
 void play_song(const SongEvent* song) {
@@ -99,13 +99,12 @@ void play_song(const SongEvent* song) {
         if (event.type == 2) break; // End
         
         else if (event.type == 1) { // Note On
-            // SPECIAL HANDLING FOR DRUMS (Ch 8)
             if (event.channel == 8) {
-                handle_drum_note(event.note);
+                // Dynamic Drum Patch Swap
+                load_drum_patch(8, event.note);
             }
-            
             OPL_NoteOn(event.channel, event.note);
-        }
+    }
         else if (event.type == 0) { // Note Off
             OPL_NoteOff(event.channel);
         }
@@ -141,26 +140,26 @@ int main() {
     
     opl_write(false, 0x01); opl_write(true, 0x20); // Enable Waveforms
 
-    // --- INSTRUMENT SETUP ---
+    // 1. INSTRUMENT SETUP
     printf("Loading Instruments...\n");
 
-    // 1. Clear all 9 channels to a default (Guitar)
-    // This ensures unused channels don't make garbage sounds if accidentally triggered
+    // A. Initialize all channels to Piano (GM 0) by default
     for(int i=0; i<9; i++) {
-        load_patch(i, &patch_guitar);
+        load_gm_instrument(i, 0); 
     }
 
-    // 2. Specific Assignments for Doom E1M1
-    // The MIDI file uses Channel 1 for the Riff and Channel 2 for the Bass.
-    // Our Python script maps these 1:1 to OPL channels.
-    
-    load_patch(1, &patch_guitar); // OPL Ch 1: Lead Guitar
-    load_patch(2, &patch_bass);   // OPL Ch 2: Electric Bass (Quieter volume)
+    // B. Load specific Doom instruments
+    // In a real MIDI player, we would read "Program Change" events from the file.
+    // For now, we hardcode the mapping based on the Doom MIDI:
 
-    // 3. Drum Channel (OPL Ch 8)
-    // Even though 'handle_drum_note' swaps this dynamically during the song,
-    // we load the Kick Drum initially so the channel isn't undefined.
-    load_patch(8, &patch_bd);
+    // Channel 1 uses Overdriven Guitar (GM Program 29)
+    load_gm_instrument(1, 29); 
+
+    // Channel 2 uses Electric Bass (GM Program 33)
+    load_gm_instrument(2, 33);
+
+    // Channel 8 (Drums) - Initial setup (Kick)
+    load_drum_patch(8, 36);
 
     printf("Starting Jukebox...\n");
 

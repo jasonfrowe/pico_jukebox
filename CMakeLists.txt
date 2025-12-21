@@ -37,7 +37,9 @@ pico_sdk_init()
 
 add_executable(pico_jukebox 
 pico_jukebox.c
-opl.c )
+opl.c 
+instruments.c
+)
 
 pico_set_program_name(pico_jukebox "pico_jukebox")
 pico_set_program_version(pico_jukebox "0.1")

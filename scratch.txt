@@ -1,125 +1,94 @@
-// --- Main Application ---
+#include "instruments.h"
 
-int main() {
-    stdio_init_all();
-    setup_pins();
+// A subset of General MIDI instruments (derived from standard AdLib banks)
+// Array index = MIDI Program Number
+const OPL_Patch gm_bank[128] = {
+    // 0: Acoustic Grand Piano
+    [0] = { .m_ave=0x01, .m_ksl=0x10, .m_atdec=0xF0, .m_susrel=0xF3, .m_wave=0x00,
+            .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF0, .c_susrel=0xF3, .c_wave=0x00, .feedback=0x04 },
+    
+    // 16: Hammond Organ
+    [16] = { .m_ave=0x01, .m_ksl=0x80, .m_atdec=0xF1, .m_susrel=0x73, .m_wave=0x00,
+             .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF1, .c_susrel=0x73, .c_wave=0x00, .feedback=0x0A },
 
-    printf("Pico OPL2 Jukebox Starting...\n");
+    // 19: Church Organ
+    [19] = { .m_ave=0x00, .m_ksl=0x80, .m_atdec=0x91, .m_susrel=0x53, .m_wave=0x00,
+             .c_ave=0x01, .c_ksl=0x00, .c_atdec=0x91, .c_susrel=0x53, .c_wave=0x00, .feedback=0x02 },
 
-    // 1. Reset FPGA
-    gpio_put(PIN_RST, 0); sleep_ms(10);
-    gpio_put(PIN_RST, 1); sleep_ms(10);
+    // 29: Overdriven Guitar (Doom Riff!)
+    [29] = { .m_ave=0x01, .m_ksl=0x15, .m_atdec=0xF4, .m_susrel=0xF4, .m_wave=0x01,
+             .c_ave=0x01, .c_ksl=0x05, .c_atdec=0xF4, .c_susrel=0xF4, .c_wave=0x00, .feedback=0x06 },
 
-    // 2. Setup Instrument (Violin-ish / Sustaining)
+    // 33: Electric Bass (Finger)
+    // [33] = { .m_ave=0x01, .m_ksl=0x1A, .m_atdec=0x66, .m_susrel=0xF6, .m_wave=0x01,
+    //          .c_ave=0x00, .c_ksl=0x08, .c_atdec=0x94, .c_susrel=0xC4, .c_wave=0x00, .feedback=0x08 },
+    // 33: Electric Bass (Finger) - TIGHTENED RELEASE
+    [33] = { .m_ave=0x01, .m_ksl=0x1A, .m_atdec=0x66, .m_susrel=0xF6, .m_wave=0x01,
+             .c_ave=0x00, .c_ksl=0x08, .c_atdec=0x94, 
+             .c_susrel=0xCB, // Changed from 0xC4 (Slow) to 0xCB (Fast Release)
+             .c_wave=0x00, .feedback=0x08 },
+
+    // 48: String Ensemble 1 (Slow attack)
+    [48] = { .m_ave=0x01, .m_ksl=0x00, .m_atdec=0x63, .m_susrel=0x75, .m_wave=0x00,
+             .c_ave=0x01, .c_ksl=0x00, .c_atdec=0x75, .c_susrel=0x95, .c_wave=0x00, .feedback=0x00 },
+
+    // 61: Brass Section
+    [61] = { .m_ave=0x01, .m_ksl=0x40, .m_atdec=0x84, .m_susrel=0x75, .m_wave=0x00,
+             .c_ave=0x01, .c_ksl=0x00, .c_atdec=0x83, .c_susrel=0x65, .c_wave=0x00, .feedback=0x02 },
+
+    // 80: Lead 1 (Square)
+    [80] = { .m_ave=0x01, .m_ksl=0x00, .m_atdec=0xA1, .m_susrel=0x53, .m_wave=0x01,
+             .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xA1, .c_susrel=0x53, .c_wave=0x01, .feedback=0x0A },
+
+    // Default Fallback (Piano) for all undefined indices
+    [1 ... 15] = { .m_ave=0x01, .m_ksl=0x10, .m_atdec=0xF0, .m_susrel=0xF3, .m_wave=0x00, .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF0, .c_susrel=0xF3, .c_wave=0x00, .feedback=0x04 },
+    [17 ... 18] = { .m_ave=0x01, .m_ksl=0x10, .m_atdec=0xF0, .m_susrel=0xF3, .m_wave=0x00, .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF0, .c_susrel=0xF3, .c_wave=0x00, .feedback=0x04 },
+    // ... (You can technically omit these, C will zero-init them, but piano is safer)
+};
+
+// --- DRUM DEFINITIONS ---
+const OPL_Patch drum_bd = { .m_ave=0x00, .m_ksl=0x00, .m_atdec=0xF1, .m_susrel=0xCF, .m_wave=0x00, .c_ave=0x00, .c_ksl=0x00, .c_atdec=0xF1, .c_susrel=0xCF, .c_wave=0x00, .feedback=0x00 };
+const OPL_Patch drum_snare = { .m_ave=0x08, .m_ksl=0x00, .m_atdec=0xF9, .m_susrel=0xF9, .m_wave=0x00, .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF9, .c_susrel=0xF9, .c_wave=0x02, .feedback=0x00 };
+const OPL_Patch drum_hihat = { .m_ave=0x01, .m_ksl=0x00, .m_atdec=0xF8, .m_susrel=0xF8, .m_wave=0x00, .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF8, .c_susrel=0xF8, .c_wave=0x02, .feedback=0x00 };
+
+
+// --- INTERNAL HELPER ---
+void write_patch_to_channel(uint8_t ch, const OPL_Patch* p) {
+    if (ch > 8) return;
+    uint8_t offsets[9] = {0, 1, 2, 8, 9, 10, 16, 17, 18};
+    uint8_t off = offsets[ch];
+
     // Modulator
-    opl_write(false, 0x20); opl_write(true, 0x01); // Multiple
-    opl_write(false, 0x40); opl_write(true, 0x10); // Level (High output)
-    opl_write(false, 0x60); opl_write(true, 0xF0); // Attack/Decay
-    opl_write(false, 0x80); opl_write(true, 0x77); // Sustain/Release
-    
+    opl_write(false, 0x20 + off); opl_write(true, p->m_ave);
+    opl_write(false, 0x40 + off); opl_write(true, p->m_ksl);
+    opl_write(false, 0x60 + off); opl_write(true, p->m_atdec);
+    opl_write(false, 0x80 + off); opl_write(true, p->m_susrel);
+    opl_write(false, 0xE0 + off); opl_write(true, p->m_wave);
+
     // Carrier
-    opl_write(false, 0x23); opl_write(true, 0x01); 
-    opl_write(false, 0x43); opl_write(true, 0x00); // Max Volume
-    opl_write(false, 0x63); opl_write(true, 0xF0);
-    opl_write(false, 0x83); opl_write(true, 0x77);
+    opl_write(false, 0x23 + off); opl_write(true, p->c_ave);
+    opl_write(false, 0x43 + off); opl_write(true, p->c_ksl);
+    opl_write(false, 0x63 + off); opl_write(true, p->c_atdec);
+    opl_write(false, 0x83 + off); opl_write(true, p->c_susrel);
+    opl_write(false, 0xE3 + off); opl_write(true, p->c_wave);
+
+    // Feedback
+    opl_write(false, 0xC0 + ch);  opl_write(true, p->feedback);
+}
+
+// --- PUBLIC API IMPLEMENTATION ---
+
+void load_gm_instrument(uint8_t channel, uint8_t program_number) {
+    if (program_number > 127) program_number = 0; // Fallback to Piano
     
-    // FM Mode
-    opl_write(false, 0xC0); opl_write(true, 0x01); // Algorithm 0 (FM)
-
-    // 3. Main Loop
-    // We will pick a fixed "Block" (Octave) of 4.
-    // Block 4 is bits 2-4: 100 -> 0x10
-    // Key On is bit 5:     1     -> 0x20
-    // Base value for B0 is 0x30.
-    uint8_t base_b0 = 0x30; 
-
-    while (true) {
-        // Sweep frequency numbers (0 to 1023 max for 10 bits)
-        // We sweep 200 to 800
-        for (uint16_t f_num = 200; f_num < 800; f_num += 5) {
-            
-            // 1. Write Low 8 bits to 0xA0
-            opl_write(false, 0xA0); 
-            opl_write(true,  f_num & 0xFF);
-
-            // 2. Write High 2 bits to 0xB0... 
-            // BUT KEEP KEY-ON (0x20) AND BLOCK (0x10) SET!
-            uint8_t high_bits = (f_num >> 8) & 0x03;
-            
-            opl_write(false, 0xB0);
-            opl_write(true,  base_b0 | high_bits); 
-
-            sleep_ms(10);
-        }
-        
-        sleep_ms(500); // Pause at top
-    }
-} 
-
-
-
--------
-
-int main() {
-    stdio_init_all();
-    setup_pins();
-
-    // 1. Hardware Reset (Pulse Low)
-    // This resets the JTOPL Verilog core
-    gpio_put(PIN_RST, 0); 
-    sleep_ms(10);
-    gpio_put(PIN_RST, 1); 
-    sleep_ms(10);
-
-    // 2. Software Initialization (The Missing Step!)
-    printf("Initializing OPL2...\n");
+    // Check if the patch is "Empty" (all zeros) and fallback to piano if so
+    // (Optional safety check if you didn't populate the whole array)
     
-    // A. Wipe registers
-    opl_clear();
-    
-    // B. Enable Waveform Select (Crucial Standard Init)
-    // Register 0x01, Bit 5 (0x20) = 1
-    // Without this, some OPL2 cores behave unpredictably.
-    opl_write(false, 0x01); 
-    opl_write(true,  0x20);
+    write_patch_to_channel(channel, &gm_bank[program_number]);
+}
 
-    // C. Set Note Select / CSM to normal
-    // Register 0x08 = 0x00 (Split Point = 0, Keyboard Split = 0)
-    opl_write(false, 0x08);
-    opl_write(true,  0x00);
-
-    // 3. Setup Instrument (Violin-ish / Sustaining)
-    // Modulator
-    opl_write(false, 0x20); opl_write(true, 0x01); // Multiple
-    opl_write(false, 0x40); opl_write(true, 0x10); // Level (High output)
-    opl_write(false, 0x60); opl_write(true, 0xF0); // Attack/Decay
-    // opl_write(false, 0x80); opl_write(true, 0x77); // Sustain/Release
-    opl_write(false, 0x80); opl_write(true, 0x7C); // Medium Sustain, Fast Release (Snappier end)
-    
-    // Carrier
-    opl_write(false, 0x23); opl_write(true, 0x01); 
-    opl_write(false, 0x43); opl_write(true, 0x00); // Max Volume
-    opl_write(false, 0x63); opl_write(true, 0xF0);
-    // opl_write(false, 0x83); opl_write(true, 0x77);
-    // Sustain/Release
-    // 0x7C = Medium Sustain, Fast Release (Snappier end)
-    opl_write(false, 0x83); opl_write(true, 0x7C);
-    
-    // FM Mode
-    opl_write(false, 0xC0); opl_write(true, 0x01); // Algorithm 0 (FM)
-    
-    uint8_t scale[] = {60, 62, 64, 65, 67, 69, 71, 72}; // C major scale
-
-    while(true) {
-        for(int i=0; i<8; i++) {
-            OPL_NoteOn(0, scale[i]); 
-            sleep_ms(200);
-            
-            // Use the hard cut version for now
-            OPL_NoteOff(0); 
-            
-            sleep_ms(50);
-        }
-        sleep_ms(1000);
-    }
+void load_drum_patch(uint8_t channel, uint8_t drum_note) {
+    if (drum_note == 35 || drum_note == 36) write_patch_to_channel(channel, &drum_bd);
+    else if (drum_note == 38 || drum_note == 40) write_patch_to_channel(channel, &drum_snare);
+    else write_patch_to_channel(channel, &drum_hihat);
 }
