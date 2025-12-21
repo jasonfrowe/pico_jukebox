@@ -35,14 +35,16 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(pico_jukebox pico_jukebox.c )
+add_executable(pico_jukebox 
+pico_jukebox.c
+opl.c )
 
 pico_set_program_name(pico_jukebox "pico_jukebox")
 pico_set_program_version(pico_jukebox "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(pico_jukebox 0)
-pico_enable_stdio_usb(pico_jukebox 0)
+pico_enable_stdio_usb(pico_jukebox 1)
 
 # Add the standard library to the build
 target_link_libraries(pico_jukebox

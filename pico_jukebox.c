@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "opl.h"
 
 // --- Hardware Wiring Configuration ---
 // Data Bus: GP0 - GP7
@@ -61,60 +62,61 @@ void setup_pins() {
     }
 }
 
-// --- Main Application ---
-
 int main() {
     stdio_init_all();
     setup_pins();
 
-    printf("Pico OPL2 Jukebox Starting...\n");
+    // 1. Hardware Reset (Pulse Low)
+    // This resets the JTOPL Verilog core
+    gpio_put(PIN_RST, 0); 
+    sleep_ms(10);
+    gpio_put(PIN_RST, 1); 
+    sleep_ms(10);
 
-    // 1. Reset FPGA
-    gpio_put(PIN_RST, 0); sleep_ms(10);
-    gpio_put(PIN_RST, 1); sleep_ms(10);
+    // 2. Software Initialization (The Missing Step!)
+    printf("Initializing OPL2...\n");
+    
+    // A. Wipe registers
+    opl_clear();
+    
+    // B. Enable Waveform Select (Crucial Standard Init)
+    // Register 0x01, Bit 5 (0x20) = 1
+    // Without this, some OPL2 cores behave unpredictably.
+    opl_write(false, 0x01); 
+    opl_write(true,  0x20);
 
-    // 2. Setup Instrument (Violin-ish / Sustaining)
+    // C. Set Note Select / CSM to normal
+    // Register 0x08 = 0x00 (Split Point = 0, Keyboard Split = 0)
+    opl_write(false, 0x08);
+    opl_write(true,  0x00);
+
+    // 3. Setup Instrument (Violin-ish / Sustaining)
     // Modulator
     opl_write(false, 0x20); opl_write(true, 0x01); // Multiple
     opl_write(false, 0x40); opl_write(true, 0x10); // Level (High output)
     opl_write(false, 0x60); opl_write(true, 0xF0); // Attack/Decay
-    opl_write(false, 0x80); opl_write(true, 0x77); // Sustain/Release
-    
+    opl_write(false, 0x80); opl_write(true, 0x00); // 7C); // Medium Sustain, Fast Release (Snappier end)
+    opl_write(false, 0xE0); opl_write(true, 0x00); // No Vibrato, No Tremolo, No Key Scale, No Waveform Select
+
     // Carrier
     opl_write(false, 0x23); opl_write(true, 0x01); 
     opl_write(false, 0x43); opl_write(true, 0x00); // Max Volume
     opl_write(false, 0x63); opl_write(true, 0xF0);
-    opl_write(false, 0x83); opl_write(true, 0x77);
+    opl_write(false, 0x83); opl_write(true, 0x00); // 7C);
+    opl_write(false, 0xE3); opl_write(true, 0x00);
     
     // FM Mode
     opl_write(false, 0xC0); opl_write(true, 0x01); // Algorithm 0 (FM)
+    
+    uint8_t scale[] = {60, 62, 64, 65, 67, 69, 71, 72}; // C major scale
 
-    // 3. Main Loop
-    // We will pick a fixed "Block" (Octave) of 4.
-    // Block 4 is bits 2-4: 100 -> 0x10
-    // Key On is bit 5:     1     -> 0x20
-    // Base value for B0 is 0x30.
-    uint8_t base_b0 = 0x30; 
-
-    while (true) {
-        // Sweep frequency numbers (0 to 1023 max for 10 bits)
-        // We sweep 200 to 800
-        for (uint16_t f_num = 200; f_num < 800; f_num += 5) {
-            
-            // 1. Write Low 8 bits to 0xA0
-            opl_write(false, 0xA0); 
-            opl_write(true,  f_num & 0xFF);
-
-            // 2. Write High 2 bits to 0xB0... 
-            // BUT KEEP KEY-ON (0x20) AND BLOCK (0x10) SET!
-            uint8_t high_bits = (f_num >> 8) & 0x03;
-            
-            opl_write(false, 0xB0);
-            opl_write(true,  base_b0 | high_bits); 
-
-            sleep_ms(10);
+    while(true) {
+        for(int i=0; i<8; i++) {
+            OPL_NoteOn(0, scale[i]);
+            sleep_ms(400);  // Longer hold = fuller notes
         }
-        
-        sleep_ms(500); // Pause at top
+        // Optional short pause
+        OPL_NoteOff(0);
+        sleep_ms(800);
     }
-} 
+}
