@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "opl.h"
+#include "instruments.h"
+#include "song_data.h"
 
 // --- Hardware Wiring Configuration ---
 // Data Bus: GP0 - GP7
@@ -62,61 +64,109 @@ void setup_pins() {
     }
 }
 
+
+
+// Add this helper function
+void handle_drum_note(uint8_t note) {
+    // Channel 8 is our dedicated Drum Channel
+    
+    // MIDI Map:
+    // 35, 36 = Kick
+    // 38, 40 = Snare
+    // 42, 44, 46 = HiHat
+    // 41, 43, 45, 47, 48, 50 = Toms
+    // 49, 57 = Cymbals
+    
+    if (note == 35 || note == 36) {
+        load_patch(8, &patch_bd);
+    } 
+    else if (note == 38 || note == 40) {
+        load_patch(8, &patch_snare);
+    }
+    else if (note >= 41) {
+        load_patch(8, &patch_hihat); // Lazy catch-all for cymbals/hats
+    }
+}
+
+// Updated Sequencer
+void play_song(const SongEvent* song) {
+    int i = 0;
+    while (true) {
+        SongEvent event = song[i];
+        
+        if (event.delay_ms > 0) sleep_ms(event.delay_ms);
+
+        if (event.type == 2) break; // End
+        
+        else if (event.type == 1) { // Note On
+            // SPECIAL HANDLING FOR DRUMS (Ch 8)
+            if (event.channel == 8) {
+                handle_drum_note(event.note);
+            }
+            
+            OPL_NoteOn(event.channel, event.note);
+        }
+        else if (event.type == 0) { // Note Off
+            OPL_NoteOff(event.channel);
+        }
+
+        i++;
+    }
+}
+
 int main() {
     stdio_init_all();
-    setup_pins();
+    setup_pins(); // Pins default to HIGH (Inactive)
+
+    printf("Pico OPL2 Jukebox Starting...\n");
+
+    // --- NEW: WAIT FOR FPGA TO WAKE UP ---
+    // The TinyFPGA BX bootloader takes about 1-2 seconds.
+    // We wait 3 seconds to be absolutely sure the FPGA is ready 
+    // to listen to our commands.
+    printf("Waiting for FPGA Bootloader...\n");
+    sleep_ms(3000); 
 
     // 1. Hardware Reset (Pulse Low)
-    // This resets the JTOPL Verilog core
+    // Now that the FPGA is definitely awake, we reset its core logic.
+    printf("Resetting JTOPL Core...\n");
     gpio_put(PIN_RST, 0); 
     sleep_ms(10);
     gpio_put(PIN_RST, 1); 
     sleep_ms(10);
 
-    // 2. Software Initialization (The Missing Step!)
-    printf("Initializing OPL2...\n");
-    
-    // A. Wipe registers
+    // 2. Software Initialization
+    printf("Initializing OPL2 Registers...\n");
     opl_clear();
     
-    // B. Enable Waveform Select (Crucial Standard Init)
-    // Register 0x01, Bit 5 (0x20) = 1
-    // Without this, some OPL2 cores behave unpredictably.
-    opl_write(false, 0x01); 
-    opl_write(true,  0x20);
+    opl_write(false, 0x01); opl_write(true, 0x20); // Enable Waveforms
 
-    // C. Set Note Select / CSM to normal
-    // Register 0x08 = 0x00 (Split Point = 0, Keyboard Split = 0)
-    opl_write(false, 0x08);
-    opl_write(true,  0x00);
+    // --- INSTRUMENT SETUP ---
+    printf("Loading Instruments...\n");
 
-    // 3. Setup Instrument (Violin-ish / Sustaining)
-    // Modulator
-    opl_write(false, 0x20); opl_write(true, 0x01); // Multiple
-    opl_write(false, 0x40); opl_write(true, 0x10); // Level (High output)
-    opl_write(false, 0x60); opl_write(true, 0xF0); // Attack/Decay
-    opl_write(false, 0x80); opl_write(true, 0x00); // 7C); // Medium Sustain, Fast Release (Snappier end)
-    opl_write(false, 0xE0); opl_write(true, 0x00); // No Vibrato, No Tremolo, No Key Scale, No Waveform Select
+    // 1. Clear all 9 channels to a default (Guitar)
+    // This ensures unused channels don't make garbage sounds if accidentally triggered
+    for(int i=0; i<9; i++) {
+        load_patch(i, &patch_guitar);
+    }
 
-    // Carrier
-    opl_write(false, 0x23); opl_write(true, 0x01); 
-    opl_write(false, 0x43); opl_write(true, 0x00); // Max Volume
-    opl_write(false, 0x63); opl_write(true, 0xF0);
-    opl_write(false, 0x83); opl_write(true, 0x00); // 7C);
-    opl_write(false, 0xE3); opl_write(true, 0x00);
+    // 2. Specific Assignments for Doom E1M1
+    // The MIDI file uses Channel 1 for the Riff and Channel 2 for the Bass.
+    // Our Python script maps these 1:1 to OPL channels.
     
-    // FM Mode
-    opl_write(false, 0xC0); opl_write(true, 0x01); // Algorithm 0 (FM)
-    
-    uint8_t scale[] = {60, 62, 64, 65, 67, 69, 71, 72}; // C major scale
+    load_patch(1, &patch_guitar); // OPL Ch 1: Lead Guitar
+    load_patch(2, &patch_bass);   // OPL Ch 2: Electric Bass (Quieter volume)
+
+    // 3. Drum Channel (OPL Ch 8)
+    // Even though 'handle_drum_note' swaps this dynamically during the song,
+    // we load the Kick Drum initially so the channel isn't undefined.
+    load_patch(8, &patch_bd);
+
+    printf("Starting Jukebox...\n");
 
     while(true) {
-        for(int i=0; i<8; i++) {
-            OPL_NoteOn(0, scale[i]);
-            sleep_ms(400);  // Longer hold = fuller notes
-        }
-        // Optional short pause
-        OPL_NoteOff(0);
-        sleep_ms(800);
+        printf("Playing 'DOOM'...\n");
+        play_song(doom_song);
+        sleep_ms(2000); // Wait 2 seconds before repeating the song
     }
 }
