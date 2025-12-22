@@ -1,66 +1,108 @@
 import mido
 import sys
 
-# INSTRUMENT REMAP TABLE
-INSTRUMENT_REMAP = {
-    34: 34,  # Map Pick Bass (34) -> Finger Bass (33)
-    30: 30,  # Map Distortion Gt (30) -> Overdriven Gt (29)
+# --- CONFIGURATION ---
+# Default to GM (No translation needed usually)
+USE_MT32_MAP = False
+
+# --- MAPS ---
+
+# Standard Remaps for Doom/GM (Fixes weak patches)
+GM_FIX_MAP = {
+    30: 29, # Distortion Gt -> Overdriven Gt
+    34: 33, # Pick Bass -> Finger Bass
+}
+
+# The "Rosetta Stone": MT-32 Preset -> General MIDI Program
+# Based on the standard Roland MT-32 Preset list.
+MT32_TO_GM = {
+    # Pianos
+    0: 0,   1: 1,   2: 3,   3: 4,   4: 5,   5: 6,   6: 7,   7: 2,
+    # Organs
+    8: 16,  9: 17,  10: 18, 11: 19, 12: 20, 13: 21, 14: 22, 15: 23,
+    # Keyboards / Synths
+    16: 62, 17: 63, 18: 38, 19: 39, 20: 80, 21: 81, 22: 54, 23: 55,
+    # Bass
+    24: 32, 25: 33, 26: 34, 27: 35, 28: 36, 29: 37, 30: 38, 31: 39,
+    # Winds / Brass
+    32: 56, 33: 57, 34: 58, 35: 59, 36: 60, 37: 61, 38: 62, 39: 63,
+    40: 64, 41: 65, 42: 66, 43: 67, 44: 68, 45: 69, 46: 70, 47: 71,
+    48: 72, 49: 73, 50: 74, 51: 75, 52: 76, 53: 77, 54: 78, 55: 79,
+    # Strings
+    56: 40, 57: 41, 58: 42, 59: 43, 60: 44, 61: 45, 62: 46, 63: 47,
+    # Guitars
+    64: 24, 65: 25, 66: 26, 67: 27, 68: 28, 69: 29, 70: 30, 71: 31,
+    # Effects / Ethnic (Best Guesses)
+    72: 104, 73: 105, 74: 106, 75: 107, 76: 108, 77: 109, 78: 110, 79: 111,
+    # ... Many MT-32 patches don't map cleanly, but this covers the basics.
 }
 
 def midi_to_c(input_file, output_file, array_name="midi_song"):
     mid = mido.MidiFile(input_file)
     events = []
     
-    print(f"Parsing {input_file}...")
+    print(f"Parsing {input_file} (MT-32 Mode: {USE_MT32_MAP})...")
     
     pending_time = 0.0
 
     for msg in mid:
         pending_time += msg.time
         
-        # We look for note_on, note_off, program_change
         if msg.type not in ['note_on', 'note_off', 'program_change']:
             continue
 
-        # Channel Mapping
+        # --- Channel Mapping ---
         opl_ch = -1
-        if msg.channel == 9: opl_ch = 8 
-        # elif msg.channel <= 2: continue # <--- MUTE 2nd Guitar (MIDI Ch 2 is index 1)
-        elif msg.channel < 8: opl_ch = msg.channel
-        else: continue
+        
+        # MT-32 uses Ch 2-9 for melody, Ch 10 for drums.
+        # But MIDI files are usually 0-indexed in Python (0-15).
+        # So MT-32 Ch 10 is index 9.
+        if msg.channel == 9: 
+            opl_ch = 8 # Map Drums to OPL Ch 8
+        elif msg.channel < 8: 
+            opl_ch = msg.channel
+        else: 
+            continue # Skip channels > 8
 
-        # Command Parsing
+        # --- Command Logic ---
         event_type = 0
         data_byte = 0
-        velocity = 0 # Default
+        velocity = 0
 
         if msg.type == 'program_change':
             if opl_ch == 8: continue # Ignore drum patch changes
+            
             event_type = 3
             original = msg.program
-            data_byte = INSTRUMENT_REMAP.get(original, original)
+            
+            # 1. MT-32 Translation
+            if USE_MT32_MAP:
+                # Look up the GM equivalent. Default to original if not found.
+                translated = MT32_TO_GM.get(original, original)
+                # Then apply the GM Fixes (e.g. Bass volume)
+                data_byte = GM_FIX_MAP.get(translated, translated)
+            else:
+                # Direct GM mapping
+                data_byte = GM_FIX_MAP.get(original, original)
             
         elif msg.type == 'note_on' and msg.velocity > 0:
             event_type = 1
             data_byte = msg.note
-            velocity = msg.velocity # Capture Velocity!
+            velocity = msg.velocity
             
         else: # Note Off
             event_type = 0
             data_byte = msg.note
             velocity = 0
 
-        # Generate C Struct
+        # --- Output ---
         delay_ms = int(pending_time * 1000)
-        
-        # { type, delay, ch, note, velocity }
         events.append(f"    {{ .type={event_type}, .delay_ms={delay_ms}, .channel={opl_ch}, .note={data_byte}, .velocity={velocity} }},")
-        
         pending_time = 0.0
 
-    # Write File
     with open(output_file, 'w') as f:
         f.write(f"#ifndef {array_name.upper()}_H\n#define {array_name.upper()}_H\n\n")
+        f.write('#include "opl.h"\n\n') # Use opl.h for the struct
         f.write(f"const SongEvent {array_name}[] = {{\n")
         f.write("\n".join(events))
         f.write("\n    { .type=2, .delay_ms=0 } // End\n")
@@ -70,6 +112,12 @@ def midi_to_c(input_file, output_file, array_name="midi_song"):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python midi2c.py <file.mid>")
+        print("Usage: python midi2c.py <file.mid> [--mt32]")
     else:
+        # Simple flag check
+        if "--mt32" in sys.argv:
+            USE_MT32_MAP = True
+            # Remove flag from args so filenames align
+            sys.argv.remove("--mt32")
+            
         midi_to_c(sys.argv[1], "song_data.h", "midi_song")

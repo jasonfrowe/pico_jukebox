@@ -16,13 +16,6 @@
 // Mask for all data pins (GPIO 0-7)
 #define DATA_MASK 0xFF
 
-typedef enum {
-    PLAYBACK_GS,     // Roland Sound Canvas / GM
-    PLAYBACK_MT32    // Roland MT-32
-} PlaybackMode;
-
-PlaybackMode current_mode = PLAYBACK_MT32;  // Or detect/auto-switch
-
 // --- Low Level Bus Interface ---
 
 // Write a byte to the OPL2/FPGA
