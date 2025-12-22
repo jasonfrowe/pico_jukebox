@@ -138,6 +138,10 @@ const OPL_Patch drum_snare = { .m_ave=0x08, .m_ksl=0x00, .m_atdec=0xF9, .m_susre
 const OPL_Patch drum_hihat = { .m_ave=0x01, .m_ksl=0x00, .m_atdec=0xF8, .m_susrel=0xF8, .m_wave=0x00, .c_ave=0x01, .c_ksl=0x00, .c_atdec=0xF8, .c_susrel=0xF8, .c_wave=0x02, .feedback=0x00 };
 
 // --- INTERNAL HELPER ---
+
+// Global Shadow for Volume Scaling
+uint8_t shadow_carrier_ksl[9] = {0};
+
 void write_patch_to_channel(uint8_t ch, const OPL_Patch* p) {
     if (ch > 8) return;
     uint8_t offsets[9] = {0, 1, 2, 8, 9, 10, 16, 17, 18};
@@ -148,6 +152,9 @@ void write_patch_to_channel(uint8_t ch, const OPL_Patch* p) {
     opl_write(false, 0x60 + off); opl_write(true, p->m_atdec);
     opl_write(false, 0x80 + off); opl_write(true, p->m_susrel);
     opl_write(false, 0xE0 + off); opl_write(true, p->m_wave);
+
+    // Save Base KSL for Velocity Scaling
+    shadow_carrier_ksl[ch] = p->c_ksl;
 
     opl_write(false, 0x23 + off); opl_write(true, p->c_ave);
     opl_write(false, 0x43 + off); opl_write(true, p->c_ksl);

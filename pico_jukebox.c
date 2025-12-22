@@ -64,38 +64,71 @@ void setup_pins() {
     }
 }
 
-// --- Song Playback Logic ---
+// --- HELPER: Velocity Scaling ---
+void apply_velocity(uint8_t channel, uint8_t velocity) {
+    if (channel > 8) return;
+    
+    // 1. Get Base Volume from Shadow Array (from instruments.c)
+    uint8_t base_ksl = shadow_carrier_ksl[channel];
+    uint8_t base_tl  = base_ksl & 0x3F; 
+    uint8_t ksl_bits = base_ksl & 0xC0; 
+    
+    // 2. Calculate Attenuation (Invert MIDI Velocity)
+    // 127=Loud (0 atten), 1=Quiet (~63 atten)
+    uint8_t attenuation = (127 - velocity) >> 1; 
+    
+    // 3. Add to Base
+    uint8_t final_tl = base_tl + attenuation;
+    if (final_tl > 63) final_tl = 63; 
+    
+    // 4. Write to Carrier KSL Register
+    uint8_t offsets[9] = {0, 1, 2, 8, 9, 10, 16, 17, 18};
+    opl_write(false, 0x43 + offsets[channel]);
+    opl_write(true,  ksl_bits | final_tl);
+}
+
+// --- THE ENGINE ---
 void play_song(const SongEvent* song) {
     int i = 0;
     while (true) {
         SongEvent event = song[i];
         
+        // 1. Wait
         if (event.delay_ms > 0) sleep_ms(event.delay_ms);
 
-        // --- COMMAND HANDLER ---
+        // 2. Process
         switch (event.type) {
             case 0: // Note Off
                 OPL_NoteOff(event.channel);
                 break;
 
             case 1: // Note On
+                // A. Drum Logic
                 if (event.channel == 8) {
-                    // Drums are special: Map Note Number -> Patch
                     load_drum_patch(8, event.note);
+                    // Pitch Hack: Make snare/hats crisp
+                    if(event.note > 36) event.note = 60; 
                 }
+                
+                // B. Dynamics
+                apply_velocity(event.channel, event.velocity);
+                
+                // C. Play
                 OPL_NoteOn(event.channel, event.note);
                 break;
 
-            case 2: // End of Song
-                return; // Break the function (or loop)
+            case 2: // End
+                return; 
 
-            case 3: // Program Change (New!)
-                // The 'note' field holds the Program Number (0-127)
-                // We use our Library function to load the patch
-                load_gm_instrument(event.channel, event.note);
+            case 3: // Program Change
+                // Doom Fix: Force heavy overdrive (29) instead of weak distortion (30)
+                if (event.note == 30) load_gm_instrument(event.channel, 29);
+                // Doom Fix: Force finger bass (33) if file asks for pick bass (34)
+                else if (event.note == 34) load_gm_instrument(event.channel, 33);
+                // Normal Load
+                else load_gm_instrument(event.channel, event.note);
                 break;
         }
-
         i++;
     }
 }
@@ -124,6 +157,11 @@ int main() {
     
     while(true) {
         play_song(midi_song);
+
+        // Reset state between loops
+        for(int c=0; c<9; c++) OPL_NoteOff(c);
+        load_drum_patch(8, 36);
+
         sleep_ms(2000);
     }
 }

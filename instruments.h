@@ -20,4 +20,8 @@ extern void load_gm_instrument(uint8_t channel, uint8_t program_number);
 // Load a specific Drum sound (Bass, Snare, HiHat, etc.)
 extern void load_drum_patch(uint8_t channel, uint8_t drum_note);
 
+// Global Shadow Array for Carrier KSL (Volume)
+// We need this to apply velocity scaling relative to the patch's natural volume.
+extern uint8_t shadow_carrier_ksl[9];
+
 #endif

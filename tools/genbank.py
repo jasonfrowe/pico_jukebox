@@ -214,6 +214,8 @@ with open("instruments.c", "w") as f:
     
     # Add helper functions
     f.write('\n// --- INTERNAL HELPER ---\n')
+    f.write('\n// Global Shadow for Volume Scaling\n')
+    f.write('uint8_t shadow_carrier_ksl[9] = {0};\n\n') # Define the array
     f.write('void write_patch_to_channel(uint8_t ch, const OPL_Patch* p) {\n')
     f.write('    if (ch > 8) return;\n')
     f.write('    uint8_t offsets[9] = {0, 1, 2, 8, 9, 10, 16, 17, 18};\n')
@@ -223,6 +225,8 @@ with open("instruments.c", "w") as f:
     f.write('    opl_write(false, 0x60 + off); opl_write(true, p->m_atdec);\n')
     f.write('    opl_write(false, 0x80 + off); opl_write(true, p->m_susrel);\n')
     f.write('    opl_write(false, 0xE0 + off); opl_write(true, p->m_wave);\n\n')
+    f.write('    // Save Base KSL for Velocity Scaling\n')
+    f.write('    shadow_carrier_ksl[ch] = p->c_ksl;\n\n')
     f.write('    opl_write(false, 0x23 + off); opl_write(true, p->c_ave);\n')
     f.write('    opl_write(false, 0x43 + off); opl_write(true, p->c_ksl);\n')
     f.write('    opl_write(false, 0x63 + off); opl_write(true, p->c_atdec);\n')
