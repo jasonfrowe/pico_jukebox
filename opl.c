@@ -20,6 +20,23 @@ const uint16_t fnum_table[12] = {
 // We need this to remember the Block/F-Number when we send a NoteOff
 uint8_t shadow_b0[9] = {0}; 
 
+// Configure GPIO directions and initial states
+void setup_pins() {
+    // Initialize Data Bus (GP0 - GP7)
+    for(int i=0; i<8; i++) {
+        gpio_init(i);
+        gpio_set_dir(i, GPIO_OUT);
+    }
+
+    // Initialize Control Lines
+    int controls[] = {PIN_A0, PIN_WE, PIN_CS, PIN_RST};
+    for(int i=0; i<4; i++) {
+        gpio_init(controls[i]);
+        gpio_set_dir(controls[i], GPIO_OUT);
+        gpio_put(controls[i], 1); // Default HIGH (Inactive)
+    }
+}
+
 uint16_t midi_to_opl_freq(uint8_t midi_note) {
     // 1. Handle Octave Offset
     // We previously used 24 (C1). To shift up an octave to hit Block 4 for Middle C,
@@ -43,6 +60,17 @@ uint16_t midi_to_opl_freq(uint8_t midi_note) {
     uint8_t low_byte = f_num & 0xFF;
 
     return (high_byte << 8) | low_byte;
+}
+
+void opl_write(bool is_data, uint8_t data) {
+    gpio_put(PIN_A0, is_data);
+    gpio_put_masked(DATA_MASK, data);
+    gpio_put(PIN_CS, 0);
+    gpio_put(PIN_WE, 0);
+    sleep_us(1); 
+    gpio_put(PIN_WE, 1);
+    gpio_put(PIN_CS, 1);
+    sleep_us(25); 
 }
 
 void OPL_NoteOn(uint8_t channel, uint8_t midi_note) {

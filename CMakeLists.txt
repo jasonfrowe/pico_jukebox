@@ -50,7 +50,9 @@ pico_enable_stdio_usb(pico_jukebox 1)
 
 # Add the standard library to the build
 target_link_libraries(pico_jukebox
-        pico_stdlib)
+        pico_stdlib
+        pico_multicore
+)
 
 # Add the standard include files to the build
 target_include_directories(pico_jukebox PRIVATE

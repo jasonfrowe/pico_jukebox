@@ -51,26 +51,25 @@ def midi_to_c(input_file, output_file, array_name="midi_song"):
         if msg.type not in ['note_on', 'note_off', 'program_change']:
             continue
 
-        # --- Channel Mapping ---
-        opl_ch = -1
+        # --- NEW CHANNEL MAPPING FOR POLYPHONY ---
+        # We pass the MIDI channel "Raw" so the C code knows what it is.
+        # MIDI Ch 10 = Index 9.
         
-        # MT-32 uses Ch 2-9 for melody, Ch 10 for drums.
-        # But MIDI files are usually 0-indexed in Python (0-15).
-        # So MT-32 Ch 10 is index 9.
-        if msg.channel == 9: 
-            opl_ch = 8 # Map Drums to OPL Ch 8
-        elif msg.channel < 8: 
-            opl_ch = msg.channel
-        else: 
-            continue # Skip channels > 8
+        opl_ch = msg.channel 
+        
+        # FILTER:
+        # We only want Channels 0-8 (Melodic) and 9 (Drums).
+        # We skip 10-15 because we don't have enough hardware voices to care.
+        if opl_ch > 9: 
+            continue 
 
-        # --- Command Logic ---
+        # ... Command Logic ...
         event_type = 0
         data_byte = 0
         velocity = 0
 
         if msg.type == 'program_change':
-            if opl_ch == 8: continue # Ignore drum patch changes
+            if opl_ch == 9: continue # Ignore program changes for Drums
             
             event_type = 3
             original = msg.program
