@@ -7,7 +7,7 @@ const SongEvent midi_song[] = {
     { .delay_ms=0, .type=3, .channel=0, .note=30 },
     { .delay_ms=0, .type=3, .channel=1, .note=29 },
     { .delay_ms=0, .type=1, .channel=1, .note=40 },
-    { .delay_ms=0, .type=3, .channel=2, .note=33 },
+    { .delay_ms=0, .type=3, .channel=2, .note=34 },
     { .delay_ms=0, .type=1, .channel=2, .note=40 },
     { .delay_ms=0, .type=1, .channel=8, .note=36 },
     { .delay_ms=0, .type=1, .channel=8, .note=40 },
