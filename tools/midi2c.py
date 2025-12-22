@@ -25,7 +25,7 @@ def midi_to_c(input_file, output_file, array_name="midi_song"):
         # Channel Mapping
         opl_ch = -1
         if msg.channel == 9: opl_ch = 8 
-        # elif msg.channel == 2: continue # <--- MUTE 2nd Guitar (MIDI Ch 2 is index 1)
+        # elif msg.channel <= 2: continue # <--- MUTE 2nd Guitar (MIDI Ch 2 is index 1)
         elif msg.channel < 8: opl_ch = msg.channel
         else: continue
 

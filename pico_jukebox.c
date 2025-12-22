@@ -16,6 +16,13 @@
 // Mask for all data pins (GPIO 0-7)
 #define DATA_MASK 0xFF
 
+typedef enum {
+    PLAYBACK_GS,     // Roland Sound Canvas / GM
+    PLAYBACK_MT32    // Roland MT-32
+} PlaybackMode;
+
+PlaybackMode current_mode = PLAYBACK_MT32;  // Or detect/auto-switch
+
 // --- Low Level Bus Interface ---
 
 // Write a byte to the OPL2/FPGA
@@ -107,7 +114,7 @@ void play_song(const SongEvent* song) {
                 if (event.channel == 8) {
                     load_drum_patch(8, event.note);
                     // Pitch Hack: Make snare/hats crisp
-                    if(event.note > 36) event.note = 60; 
+                    // if(event.note > 36) event.note = 60; 
                 }
                 
                 // B. Dynamics
