@@ -108,6 +108,12 @@ void play_song(const SongEvent* song) {
                     load_drum_patch(8, event.note);
                     // Pitch Hack: Make snare/hats crisp
                     // if(event.note > 36) event.note = 60; 
+
+                    // --- KICK DRUM PITCH SHIFT ---
+                    // MIDI Kick is 35 or 36. 
+                    if (event.note == 35 || event.note == 36) {
+                        event.note -= 12; // Shift up 1 Octave (36 -> 48)
+                    }
                 }
                 
                 // B. Dynamics
@@ -121,13 +127,14 @@ void play_song(const SongEvent* song) {
                 return; 
 
             case 3: // Program Change
-                // Doom Fix: Force heavy overdrive (29) instead of weak distortion (30)
-                if (event.note == 30) load_gm_instrument(event.channel, 29);
-                // Doom Fix: Force finger bass (33) if file asks for pick bass (34)
-                else if (event.note == 34) load_gm_instrument(event.channel, 33);
-                // Normal Load
-                else load_gm_instrument(event.channel, event.note);
-                break;
+                // // Doom Fix: Force heavy overdrive (29) instead of weak distortion (30)
+                // if (event.note == 30) load_gm_instrument(event.channel, 29);
+                // // Doom Fix: Force finger bass (33) if file asks for pick bass (34)
+                // else if (event.note == 34) load_gm_instrument(event.channel, 33);
+                // // Normal Load
+                // else load_gm_instrument(event.channel, event.note);
+                // break;
+                load_gm_instrument(event.channel, event.note);
         }
         i++;
     }

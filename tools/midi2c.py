@@ -9,8 +9,8 @@ USE_MT32_MAP = False
 
 # Standard Remaps for Doom/GM (Fixes weak patches)
 GM_FIX_MAP = {
-    30: 29, # Distortion Gt -> Overdriven Gt
-    34: 33, # Pick Bass -> Finger Bass
+    30: 30, # Distortion Gt -> Overdriven Gt
+    34: 34, # Pick Bass -> Finger Bass
 }
 
 # The "Rosetta Stone": MT-32 Preset -> General MIDI Program

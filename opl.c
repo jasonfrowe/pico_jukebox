@@ -2,9 +2,18 @@
 #include "pico/stdlib.h"
 #include "opl.h"
 
-// F-Numbers for Octave 4
+// ==========================================================
+// OPL2 FREQUENCY MATH (TUNED FOR 4.0 MHz FPGA CLOCK)
+// ==========================================================
+// The real OPL2 runs at ~3.58 MHz. Our FPGA runs at 4.0 MHz.
+// This makes the pitch ~12% too high (2 semitones).
+// We compensate by scaling the F-Numbers down by (3.58 / 4.0 = 0.895).
+
+// Original (3.58MHz): { 344, 363, 385, 408, 432, 458, 485, 514, 544, 577, 611, 647 }
+// Tuned    (4.00MHz): { 308, 325, 345, 365, 387, 410, 434, 460, 487, 516, 547, 579 }
+
 const uint16_t fnum_table[12] = {
-    344, 363, 385, 408, 432, 458, 485, 514, 544, 577, 611, 647
+    308, 325, 345, 365, 387, 410, 434, 460, 487, 516, 547, 579
 };
 
 // Shadow registers for all 9 channels
@@ -12,14 +21,24 @@ const uint16_t fnum_table[12] = {
 uint8_t shadow_b0[9] = {0}; 
 
 uint16_t midi_to_opl_freq(uint8_t midi_note) {
-    if (midi_note < 24) midi_note = 24;
+    // 1. Handle Octave Offset
+    // We previously used 24 (C1). To shift up an octave to hit Block 4 for Middle C,
+    // we change the offset to 12 (C0).
     
-    int block = (midi_note - 24) / 12;
+    // Clamp to lowest valid note (C0) to prevent negative math
+    if (midi_note < 12) midi_note = 12;
+    
+    int block = (midi_note - 12) / 12; // Adjusted offset
+    int note_idx = (midi_note - 12) % 12;
+    
+    // OPL2 only supports Blocks 0-7. 
+    // If the MIDI note is too high, we clamp to Block 7 
+    // (and it will just play the highest pitch possible).
     if (block > 7) block = 7;
-    
-    int note_idx = (midi_note - 24) % 12;
+
     uint16_t f_num = fnum_table[note_idx];
 
+    // Pack: KeyOn (0x20) | Block | F-Num High
     uint8_t high_byte = 0x20 | (block << 2) | ((f_num >> 8) & 0x03);
     uint8_t low_byte = f_num & 0xFF;
 

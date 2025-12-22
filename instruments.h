@@ -24,4 +24,9 @@ extern void load_drum_patch(uint8_t channel, uint8_t drum_note);
 // We need this to apply velocity scaling relative to the patch's natural volume.
 extern uint8_t shadow_carrier_ksl[9];
 
+// Update a specific instrument in the bank at runtime
+void update_gm_patch(uint8_t program_number, const OPL_Patch* new_patch);
+
+extern OPL_Patch gm_bank[128];
+
 #endif
