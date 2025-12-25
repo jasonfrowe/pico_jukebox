@@ -113,3 +113,4 @@ def parse_wopl(filename, output_c="instruments_wopl.c"):
 
 if __name__ == "__main__":
     parse_wopl("Apogee-IMF-90.wopl")
+    # parse_wopl("fatman-2op.wopl")
